@@ -178,3 +178,32 @@ test('Apple outage followed by empty Melon results is incomplete, not no matchin
  assert.equal(result.status,'partial');assert.equal(result.tracks.length,0);
  assert.ok(result.issues.some(issue=>issue.source==='itunes.apple.com'&&issue.code==='HTTP_403'));
 });
+test('release search stops scheduling candidates once ten distinct verified tracks are ready',async t=>{
+ reset();let albumCalls=0;
+ t.mock.method(globalThis,'fetch',async input=>{
+  const url=new URL(input);
+  if(url.hostname==='query.wikidata.org')return Response.json({results:{bindings:Array.from({length:24},(_,i)=>({item:value(`https://www.wikidata.org/entity/Q${i+1}`),itemLabel:value(`Album${i}`),artistLabel:value('AKMU'),date:value('2014-04-07')}))}});
+  if(url.hostname==='musicbrainz.org')return Response.json({releases:[]});
+  albumCalls++;const i=url.searchParams.get('q').replace('Album','');
+  return new Response(album('2014.04.07').replace('200%',`Song${i}`).replace('album-song-id="42"',`album-song-id="${100+Number(i)}"`));
+ });
+ const [result]=await getReleaseConnections('2014-04-07','kr','exact');
+ assert.equal(result.tracks.length,10);assert.ok(albumCalls>=10&&albumCalls<=12,`queried ${albumCalls} albums`);
+});
+test('pop song lookup starts while global popularity evidence is still pending',async t=>{
+ reset();globalThis.__birthdayChartsV2.cache.clear();
+ let releaseEvidence;const evidence=new Promise(resolve=>releaseEvidence=resolve);
+ t.mock.method(globalThis,'fetch',async(input,options)=>{
+  const url=new URL(input);
+  if(url.hostname==='query.wikidata.org'){
+   if(options.body.get('query').includes('SELECT DISTINCT ?song')){await evidence;return Response.json({results:{bindings:[]}});}
+   return Response.json({results:{bindings:[{item:value('https://www.wikidata.org/entity/Q1'),itemLabel:value('Album'),artist:value('https://www.wikidata.org/entity/Q2'),artistLabel:value('Artist'),date:value('2014-04-07')}]}});
+  }
+  if(url.hostname==='www.wikidata.org')return Response.json({entities:{}});
+  if(url.hostname==='musicbrainz.org')return Response.json({'release-groups':[]});
+  if(url.hostname==='itunes.apple.com'){releaseEvidence();return Response.json({results:[]});}
+  return new Response('<table></table>');
+ });
+ const [result]=await getReleaseConnections('2014-04-07','pop','exact');
+ assert.equal(result.status,'ok');
+});

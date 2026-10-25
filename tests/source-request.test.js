@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {sourceRequest} from '../lib/source-request.js';
 test('a transient provider 503 retries once and can recover',async t=>{
- let calls=0;t.mock.method(globalThis,'fetch',async()=>++calls===1?new Response('',{status:503}):Response.json({ok:true}));
- assert.deepEqual(await sourceRequest('https://example.com/api',{json:true}),{ok:true});assert.equal(calls,2);
+ let calls=0,slots=0;t.mock.method(globalThis,'fetch',async()=>++calls===1?new Response('',{status:503}):Response.json({ok:true}));
+ assert.deepEqual(await sourceRequest('https://example.com/api',{json:true,beforeAttempt:()=>slots++}),{ok:true});assert.equal(calls,2);assert.equal(slots,2);
 });
 test('permanent 404 does not retry and carries safe source diagnostics',async t=>{
  let calls=0;t.mock.method(globalThis,'fetch',async()=>{calls++;return new Response('',{status:404});});
