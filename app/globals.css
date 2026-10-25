@@ -257,3 +257,10 @@ button.retry:disabled { opacity:.6; cursor:wait; }
 
 .region-chips button { background:transparent; cursor:pointer; font-family:inherit; }
 .region-chips button[aria-pressed="true"] { background:#f0f0f0; }
+
+.section-retry { display:flex; flex-direction:column; align-items:center; gap:8px; min-width:120px; }
+.section-retry p { font-size:12px; color:var(--muted); }
+.section-progress { width:120px; height:3px; overflow:hidden; border-radius:3px; background:#333; }
+.section-progress span { display:block; width:40%; height:100%; background:var(--accent); animation:section-progress 1s ease-in-out infinite alternate; }
+@keyframes section-progress { to { transform:translateX(150%); } }
+@media (prefers-reduced-motion:reduce) { .section-progress span { animation:none; width:100%; opacity:.7; } }

@@ -23,5 +23,5 @@ export default async function Page({searchParams}) {
  <MusicSection {...section} date={date} filterKey={section.key} filters={filters}/>
  </Fragment>)}
  <ShareButton date={date}/></section>}
- <footer id="about"><details><summary>검색 기준 · 출처</summary><p>발매일은 수록 앨범 기준. 가수 생일은 월·일 기준입니다. 멜론·Wikidata·MusicBrainz·Apple의 확인 가능한 기록에서 찾습니다.</p><p>팝송은 해외 아티스트의 곡 중 멜론 역대 연도별 팝 차트에 실린 곡만 보여줍니다. 연도별 차트는 해당 연도의 상위곡입니다.</p><p>검색 결과가 모든 음악을 포함하지는 않습니다. 최초 싱글 발매일은 앨범과 다를 수 있습니다. 결과는 최대 24시간 캐시합니다.</p></details><details><summary>개인정보</summary><p>날짜는 URL과 브라우저 기록에 남습니다. 검색에 필요한 날짜를 외부 데이터 서비스에 전달하며, 생일을 별도 데이터베이스에 저장하지 않습니다.</p></details><p className="footer-note">그날의 트랙</p></footer></main></>;
+ <footer id="about"><details><summary>검색 기준 · 출처</summary><p>발매일은 수록 앨범 기준. 가수 생일은 월·일 기준입니다. 멜론·Wikidata·MusicBrainz·Apple의 확인 가능한 기록에서 찾습니다.</p><p>팝송은 멜론 역대 팝 차트 수록곡이나 Wikidata에 널리 등재된 해외 곡을 보여줍니다. 연도별 차트는 해당 연도의 상위곡입니다.</p><p>검색 결과가 모든 음악을 포함하지는 않습니다. 최초 싱글 발매일은 앨범과 다를 수 있습니다. 결과는 최대 24시간 캐시합니다.</p></details><details><summary>개인정보</summary><p>날짜는 URL과 브라우저 기록에 남습니다. 검색에 필요한 날짜를 외부 데이터 서비스에 전달하며, 생일을 별도 데이터베이스에 저장하지 않습니다.</p></details><p className="footer-note">그날의 트랙</p></footer></main></>;
 }

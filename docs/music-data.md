@@ -41,3 +41,11 @@ Wikidata는 연도별 동일 월일의 VALUES 목록으로 범위를 먼저 제�
 - 가수 검색의 요청 실패는 Wikidata에 연결된 Apple artist ID(P2850)가 있을 때만 Apple lookup으로 보완한다. 이름만 같은 다른 가수로 대체하지 않는다. 역사 차트의 대체 API로 Apple 검색 결과를 사용하지 않는다. 팝송의 기존 차트 검증도 유지.
 - API 캐시 24시간/300개, 중복 요청 병합 및 프로세스당 3.1초 간격. 다중 서버에는 공용 제한기가 필요하다. https://performance-partners.apple.com/search-api
 - 실제 API에서 AKMU/PLAY/200%/2014-04-07/커버 반환 확인. 멜론 406 강제 실패 테스트에서도 같은 곡으로 복구 확인.
+
+## 팝송 Apple 우선 조회와 부분 재시도 (2026-10-25)
+- 팝송 발매 곡은 Apple iTunes Search API를 우선 사용한다. MusicKit 인증이 필요한 Apple Music API와는 구분된다. 공개 iTunes API에 날짜 전용 검색이 없어 Wikidata 날짜 후보에 MusicBrainz 최초 발매 후보(정확한 날짜 재검증)를 보강한다. MB 결과는 최대 100개 범위이므로 완전한 목록은 아니다.
+- 앨범 첫 곡 하나가 아닌 날짜·가수·앨범 일치 곡들을 검사한다. Apple에서 일치하는 곡이 없거나 요청이 실패하면 멜론을 확인한다. Apple 조회는 요청당 최대 6개 후보와 기존 간격 제한을 적용한다. 이후 후보는 멜론으로 확인한다.
+- 멜론 POP 차트 외에도 동일 Wikidata 아티스트가 부른 곡/싱글 항목의 sitelinks >= 10을 인지도 근거로 허용한다. 순위나 청취량 자체는 아니다. 발매 후보 아티스트들을 한 SPARQL 요청으로 묶어 확인하며 아티스트 ID와 곡명을 함께 대조한다. 각 곡의 “인기곡 근거” 링크로 구분 가능하다.
+- `/api/section?date=...&category=exact|same|artists|year|ten|twenty&region=kr|pop`는 선택한 카테고리·장르 하나만 조회한다. exact/same은 공통 월일 후보를 재사용하되 다른 분류의 곡 상세를 조회하지 않는다.
+- 클라이언트는 해당 결과만 교체하고 다른 카테고리·선택 장르·페이지 스크롤을 유지한다. 진행 중 버튼 비활성화 및 로딩바, unmount 시 AbortController 처리. 실패한 메모리 응답은 재시도를 가로막지 않는다.
+- 공식 자료: https://performance-partners.apple.com/search-api / https://musicbrainz.org/doc/MusicBrainz_API/Search/ReleaseGroupSearch

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {getReleaseConnections,getBirthdayArtists} from '../lib/birthday-provider.js';
 const value=v=>({value:v});
 const album=date=>`<li class="album11_li"><a class="thumb"><img src="https://cdnimg.melon.co.kr/a.jpg"></a><dt><a>PLAY</a></dt><dd class="atistname"><div class="ellipsis"><a>AKMU (악뮤)</a></div></dd><span album-song-id="42"></span><span class="songname12">200%</span><span class="cnt_view">${date}</span></li>`;
-function reset(){globalThis.__birthdayConnections.cache.clear();globalThis.__birthdayConnections.pending.clear();globalThis.__birthdayConnections.mbLast=0;}
+function reset(){globalThis.__birthdayConnections.cache.clear();globalThis.__birthdayConnections.pending.clear();globalThis.__birthdayConnections.mbLast=0;globalThis.__birthdayItunes.cache.clear();globalThis.__birthdayItunes.last=0;}
 test('live adapter joins verified aliases and never uses a mismatched date',async t=>{
  reset();t.mock.method(globalThis,'fetch',async input=>{
   const url=new URL(input);
@@ -37,6 +37,8 @@ test('pop results require matching annual chart evidence',async t=>{
    const url=new URL(input);
    if(url.hostname==='query.wikidata.org')return Response.json({results:{bindings:[{item:value('https://www.wikidata.org/entity/Q123'),itemLabel:value('PLAY'),artist:value('https://www.wikidata.org/entity/Q456'),artistLabel:value('AKMU'),date:value('2014-04-07T00:00:00Z')} ]}});
    if(url.hostname==='www.wikidata.org')return Response.json({entities:{}});
+   if(url.hostname==='musicbrainz.org')return Response.json({'release-groups':[]});
+   if(url.hostname==='itunes.apple.com')return Response.json({results:[]});
    if(url.pathname.includes('/chart/'))return new Response(`<table><tr class="lst50"><td><input name="input_check" value="${hit?42:99}"><span class="rank">1</span><div class="rank01"><a>Other song</a></div><div class="rank02"><a>Other artist</a></div></td></tr></table>`);
    return new Response(album('2014.04.07'));
   });
@@ -50,7 +52,9 @@ test('a failed pop year preserves songs verified in other years and reports part
  t.mock.method(globalThis,'fetch',async input=>{
   const url=new URL(input);
   if(url.hostname==='query.wikidata.org')return Response.json({results:{bindings:[{item:value('https://www.wikidata.org/entity/Q123'),itemLabel:value('PLAY'),artistLabel:value('AKMU'),date:value('2014-04-07T00:00:00Z')} ]}});
-  if(url.pathname.includes('/chart/')){
+  if(url.hostname==='musicbrainz.org')return Response.json({'release-groups':[]});
+   if(url.hostname==='itunes.apple.com')return Response.json({results:[]});
+   if(url.pathname.includes('/chart/')){
    if(url.searchParams.get('chartDate')==='1990')throw new Error('Offline');
    return new Response('<table><tr class="lst50"><td><input name="input_check" value="42"><span class="rank">1</span><div class="rank01"><a>200%</a></div><div class="rank02"><a>AKMU</a></div></td></tr></table>');
   }
@@ -119,4 +123,44 @@ test('Melon outages resolve through an independent Apple API with exact date val
  });
  const [exact]=await getReleaseConnections('2014-04-07');
  assert.equal(appleCalls,1);assert.equal(exact.status,'ok');assert.equal(exact.tracks[0].provider,'itunes');assert.equal(exact.tracks[0].title,'200%');
+});
+test('pop uses Apple first and checks every matching album track against popularity evidence',async t=>{
+ reset();globalThis.__birthdayChartsV2.cache.clear();let melonAlbumCalls=0;
+ t.mock.method(globalThis,'fetch',async input=>{
+  const url=new URL(input);
+  if(url.hostname==='query.wikidata.org')return Response.json({results:{bindings:[{item:value('https://www.wikidata.org/entity/Q123'),itemLabel:value('Famous Album'),artistLabel:value('Famous Artist'),date:value('2014-04-07T00:00:00Z')}]}});
+  if(url.hostname==='musicbrainz.org')return Response.json({'release-groups':[]});
+  if(url.hostname==='itunes.apple.com')return Response.json({results:[1,2].map(n=>({kind:'song',trackId:n,artistName:'Famous Artist',trackName:n===1?'Album filler':'Famous hit',collectionName:'Famous Album',releaseDate:'2014-04-07T00:00:00Z',trackViewUrl:`https://music.apple.com/us/album/test/1?i=${n}`}))});
+  if(url.pathname.includes('/chart/'))return new Response('<table><tr class="lst50"><td><input name="input_check" value="99"><span class="rank">1</span><div class="rank01"><a>Famous hit</a></div><div class="rank02"><a>Famous Artist</a></div></td></tr></table>');
+  melonAlbumCalls++;throw new Error('Must not need Melon catalog');
+ });
+ const [result]=await getReleaseConnections('2014-04-07','pop','exact');
+ assert.equal(result.status,'ok');assert.equal(result.tracks.length,1);assert.equal(result.tracks[0].title,'Famous hit');assert.equal(result.tracks[0].provider,'itunes');assert.equal(melonAlbumCalls,0);
+});
+test('retrying exact releases does not enrich same-month-day releases',async t=>{
+ reset();const titles=[];
+ t.mock.method(globalThis,'fetch',async input=>{
+  const url=new URL(input);
+  if(url.hostname==='query.wikidata.org')return Response.json({results:{bindings:['2014-04-07','2015-04-07'].map((date,i)=>({item:value(`https://www.wikidata.org/entity/Q${i+1}`),itemLabel:value(i?'Unrelated':'PLAY'),artistLabel:value('AKMU'),date:value(date)}))}});
+  if(url.hostname==='musicbrainz.org')return Response.json({releases:[]});
+  titles.push(url.searchParams.get('q'));return new Response(album('2014.04.07'));
+ });
+ const result=await getReleaseConnections('2014-04-07','kr','exact');
+ assert.equal(result.length,1);assert.equal(result[0].mode,'exact');assert.deepEqual(titles,['PLAY']);
+});
+test('a widely documented pop song can qualify without a Melon chart entry',async t=>{
+ reset();globalThis.__birthdayChartsV2.cache.clear();
+ t.mock.method(globalThis,'fetch',async(input,options)=>{
+  const url=new URL(input);
+  if(url.hostname==='query.wikidata.org'){
+   if(options.body.get('query').includes('SELECT DISTINCT ?song'))return Response.json({results:{bindings:[{song:value('http://www.wikidata.org/entity/Q789'),songLabel:value('Famous hit'),artist:value('http://www.wikidata.org/entity/Q456'),links:value('20')}]}});
+   return Response.json({results:{bindings:[{item:value('https://www.wikidata.org/entity/Q123'),itemLabel:value('Famous Album'),artist:value('https://www.wikidata.org/entity/Q456'),artistLabel:value('Famous Artist'),date:value('2014-04-07T00:00:00Z')}]}});
+  }
+  if(url.hostname==='www.wikidata.org')return Response.json({entities:{}});
+  if(url.hostname==='musicbrainz.org')return Response.json({'release-groups':[]});
+  if(url.hostname==='itunes.apple.com')return Response.json({results:[{kind:'song',trackId:1,artistName:'Famous Artist',trackName:'Famous hit',collectionName:'Famous Album',releaseDate:'2014-04-07T00:00:00Z',trackViewUrl:'https://music.apple.com/us/album/test/1'}]});
+  return new Response('<table></table>');
+ });
+ const [result]=await getReleaseConnections('2014-04-07','pop','exact');
+ assert.equal(result.tracks.length,1);assert.equal(result.tracks[0].popSource,'https://www.wikidata.org/entity/Q789');
 });

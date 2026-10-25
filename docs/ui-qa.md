@@ -52,3 +52,10 @@ Computer Use로 실제 Chrome의 기기 에뮬레이션 화면과 접근성 트�
 - 모바일 Responsive 390×963에서 작은 칩, 커버, YouTube 링크 및 목록 정렬 확인.
 - 43개 테스트 및 production build 통과.
 - 실제 서버 측 전체 응답 시간과 제한은 performance.md 참고.
+
+## 팝송 조회 보완 / 카테고리 부분 재시도
+- 프로덕션 API: 2014-10-27 exact/pop에서 Apple의 Style, Blank Space, Bad Blood, New Romantics, Out of the Woods 5곡, 정확한 날짜·커버·Apple Music 링크·인지도 근거 확인.
+- Chrome Responsive 390×963: 2014-01-01 same/pop의 다시 찾기를 클릭. 기존 검색 폼·이웃 섹션·스크롤이 유지되고 해당 카드에만 로딩바, 재시도 버튼 비활성화 확인.
+- DevTools Network 기록을 비운 뒤 /api/section?date=2014-01-01&category=same&region=pop 요청 1개만 발생, HTTP 200 완료 후 다시 찾기 버튼 복귀 확인. 전체 페이지/RSC 요청 없음.
+- 외부 Wikidata의 1월 1일 같은 날짜 조회 TIMEOUT은 남아 있음. 재시도는 이 실패를 숨기거나 빈 결과로 바꾸지 않는다.
+- 잘못된 API 날짜는 HTTP 400, 연도별 팝송 재시도는 차트 10곡 반환 확인. 48개 테스트 통과.
