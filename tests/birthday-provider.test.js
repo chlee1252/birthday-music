@@ -23,7 +23,8 @@ test('artist birthday must match full birth date, not just artist display name',
   if(url.pathname.includes('/artist/'))return new Response('<dt>생일</dt><dd>1980.05.16</dd>');
   throw new Error('Must not load a mismatched artist song');
  });
- assert.equal((await getBirthdayArtists('2000-05-16')).tracks.length,0);
+ const result=await getBirthdayArtists('2000-05-16');
+ assert.equal(result.tracks.length,0);assert.equal(result.artists.length,1);assert.equal(result.artists[0].name,'Singer');assert.equal(result.artists[0].birthday,'1993-05-16');assert.deepEqual(result.artists[0].tracks,[]);
 });
 test('source failures are distinguishable from no matching records',async t=>{
  reset();t.mock.method(globalThis,'fetch',async()=>{throw new Error('Offline');});
@@ -72,7 +73,7 @@ test('candidate limit is not reported as a connection failure',async t=>{
   if(new URL(input).hostname==='query.wikidata.org')return Response.json({results:{bindings:Array.from({length:7},(_,i)=>({person:value(`https://www.wikidata.org/entity/Q${i+1}`),personLabel:value(`Singer${i}`),dob:value('1993-05-16T00:00:00Z')}))}});
   return new Response('<table></table>');
  });
- const result=await getBirthdayArtists('2000-05-16');assert.equal(result.status,'ok');assert.equal(result.limited,true);assert.deepEqual(result.issues,[]);
+ const result=await getBirthdayArtists('2000-05-16');assert.equal(result.status,'ok');assert.equal(result.limited,true);assert.deepEqual(result.issues,[]);assert.equal(result.artists.length,6);assert.equal(new Set(result.artists.map(a=>a.id)).size,6);
 });
 test('failed song detail fetch does not masquerade as no matching artist songs',async t=>{
  reset();t.mock.method(globalThis,'fetch',async input=>{
