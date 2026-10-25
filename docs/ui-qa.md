@@ -44,3 +44,11 @@ Computer Use로 실제 Chrome의 기기 에뮬레이션 화면과 접근성 트�
 - 날짜 폼은 클라이언트 transition, 첫 SSR은 route loading, 칩 및 다시 찾기는 pending 화면으로 동일한 전체 화면을 표시한다. 칩의 scroll=false 유지.
 - Chrome 실제 입력 2014.01.01 → 화면 전체에 ‘음악 찾는 중’만 표시되는 스크린샷 확인.
 - 40개 테스트 및 프로덕션 빌드 통과, 서버 4173 재시작.
+
+## 두 지역 선조회 / Vercel 속도 검증
+- 한국 노래와 팝송을 모든 카테고리에 대해 선조회한 후 SSR 결과를 반환한다. 위의 과거 “칩 pending 화면” 동작은 제거했다.
+- 프로덕션 Chrome Computer Use에서 날짜 입력 → 전체 화면 “음악 찾는 중” → 전체 결과 표시를 확인했다.
+- 1994년 칩 한국→팝→한국→팝 전환에서 The Power Of Love / Now And Forever / I Swear 표시, 스크롤 위치 유지, DevTools Network에 추가 요청 없음 확인.
+- 모바일 Responsive 390×963에서 작은 칩, 커버, YouTube 링크 및 목록 정렬 확인.
+- 43개 테스트 및 production build 통과.
+- 실제 서버 측 전체 응답 시간과 제한은 performance.md 참고.

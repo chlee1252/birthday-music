@@ -13,3 +13,7 @@ test('DOMException timeout code 23 is normalized and retried',async t=>{
  let calls=0;t.mock.method(globalThis,'fetch',async()=>{calls++;throw new DOMException('Timed out','TimeoutError');});
  await assert.rejects(sourceRequest('https://example.com/api'),e=>e.code==='TIMEOUT'&&e.source==='example.com');assert.equal(calls,2);
 });
+test('expensive queries can avoid repeating the full timeout window',async t=>{
+ let calls=0;t.mock.method(globalThis,'fetch',async()=>{calls++;throw new DOMException('Timed out','TimeoutError');});
+ await assert.rejects(sourceRequest('https://example.com/query',{retryTimeout:false}),e=>e.code==='TIMEOUT');assert.equal(calls,1);
+});
