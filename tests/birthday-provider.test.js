@@ -164,3 +164,16 @@ test('a widely documented pop song can qualify without a Melon chart entry',asyn
  const [result]=await getReleaseConnections('2014-04-07','pop','exact');
  assert.equal(result.tracks.length,1);assert.equal(result.tracks[0].popSource,'https://www.wikidata.org/entity/Q789');
 });
+test('Apple outage followed by empty Melon results is incomplete, not no matching songs',async t=>{
+ reset();
+ t.mock.method(globalThis,'fetch',async input=>{
+  const url=new URL(input);
+  if(url.hostname==='query.wikidata.org')return Response.json({results:{bindings:[{item:value('https://www.wikidata.org/entity/Q1'),itemLabel:value('Album'),artistLabel:value('Artist'),date:value('2014-04-07')}]}});
+  if(url.hostname==='musicbrainz.org')return Response.json({'release-groups':[]});
+  if(url.hostname==='itunes.apple.com')return new Response('',{status:403});
+  return new Response('<table></table>');
+ });
+ const [result]=await getReleaseConnections('2014-04-07','pop','exact');
+ assert.equal(result.status,'partial');assert.equal(result.tracks.length,0);
+ assert.ok(result.issues.some(issue=>issue.source==='itunes.apple.com'&&issue.code==='HTTP_403'));
+});

@@ -49,3 +49,9 @@ Wikidata는 연도별 동일 월일의 VALUES 목록으로 범위를 먼저 제�
 - `/api/section?date=...&category=exact|same|artists|year|ten|twenty&region=kr|pop`는 선택한 카테고리·장르 하나만 조회한다. exact/same은 공통 월일 후보를 재사용하되 다른 분류의 곡 상세를 조회하지 않는다.
 - 클라이언트는 해당 결과만 교체하고 다른 카테고리·선택 장르·페이지 스크롤을 유지한다. 진행 중 버튼 비활성화 및 로딩바, unmount 시 AbortController 처리. 실패한 메모리 응답은 재시도를 가로막지 않는다.
 - 공식 자료: https://performance-partners.apple.com/search-api / https://musicbrainz.org/doc/MusicBrainz_API/Search/ReleaseGroupSearch
+
+## 빈 결과와 조회 실패 구분 점검
+- 2014-01-01 운영 API 실측: exact/kr는 ok·0곡, exact/pop는 부분 실패·1곡(Wikidata TIMEOUT), same/pop는 unavailable·0곡(TIMEOUT), artists/pop는 ok·0곡. 이는 측정 시점의 결과이며 외부 서비스에 따라 변한다.
+- ok·0곡은 조회 범위 내 미발견이며 음악 전체에 존재하지 않는다는 뜻이 아니다. UI도 “조회한 데이터에서 일치하는 곡이 없어요”로 명시한다.
+- Apple 실패 뒤 멜론의 빈 응답이 오류를 지우던 경로 수정. MusicBrainz 후보를 선별하는 팝 차트 조회 실패도 보존한다.
+- 차트 empty는 곡 없음으로 단정하지 않고 “검색 결과를 확인하지 못했어요”와 재시도를 표시한다. 회귀 테스트 포함 총 49개 통과.
