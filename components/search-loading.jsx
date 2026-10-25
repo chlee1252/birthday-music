@@ -1,0 +1,1 @@
+export function SearchLoading(){return <div className="search-loading-screen" role="status" aria-live="polite" aria-busy="true"><span className="loading-disc" aria-hidden="true">◉</span><h1>음악 찾는 중</h1><p>날짜와 연결된 음악을 확인하고 있어요.</p></div>;}

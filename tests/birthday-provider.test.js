@@ -1,0 +1,122 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {getReleaseConnections,getBirthdayArtists} from '../lib/birthday-provider.js';
+const value=v=>({value:v});
+const album=date=>`<li class="album11_li"><a class="thumb"><img src="https://cdnimg.melon.co.kr/a.jpg"></a><dt><a>PLAY</a></dt><dd class="atistname"><div class="ellipsis"><a>AKMU (악뮤)</a></div></dd><span album-song-id="42"></span><span class="songname12">200%</span><span class="cnt_view">${date}</span></li>`;
+function reset(){globalThis.__birthdayConnections.cache.clear();globalThis.__birthdayConnections.pending.clear();globalThis.__birthdayConnections.mbLast=0;}
+test('live adapter joins verified aliases and never uses a mismatched date',async t=>{
+ reset();t.mock.method(globalThis,'fetch',async input=>{
+  const url=new URL(input);
+  if(url.hostname==='query.wikidata.org')return Response.json({results:{bindings:[{item:value('https://www.wikidata.org/entity/Q123'),itemLabel:value('PLAY'),artist:value('https://www.wikidata.org/entity/Q456'),artistLabel:value('악동뮤지션'),date:value('2014-04-07T00:00:00Z')} ]}});
+  if(url.hostname==='www.wikidata.org')return Response.json({entities:{Q456:{aliases:{en:[{value:'AKMU'}]}}}});
+  if(url.hostname==='musicbrainz.org')return Response.json({releases:[{date:'2014-04-08',title:'Wrong date'}]});
+  return new Response(album('2014.04.07'));
+ });
+ const [exact,same]=await getReleaseConnections('2014-04-07');
+ assert.equal(exact.tracks[0].title,'200%');assert.equal(exact.tracks[0].date,'2014-04-07');assert.equal(same.tracks.length,0);
+});
+test('artist birthday must match full birth date, not just artist display name',async t=>{
+ reset();t.mock.method(globalThis,'fetch',async input=>{
+  const url=new URL(input);
+  if(url.hostname==='query.wikidata.org')return Response.json({results:{bindings:[{person:value('https://www.wikidata.org/entity/Q1'),personLabel:value('Singer'),dob:value('1993-05-16T00:00:00Z')} ]}});
+  if(url.pathname.includes('/search/'))return new Response(`<table><tr><td><input name="input_check" value="22"><a class="fc_gray">Song</a><div id="artistName"><a href="javascript:melon.link.goArtistDetail('9')">Singer</a></div></td></tr></table>`);
+  if(url.pathname.includes('/artist/'))return new Response('<dt>생일</dt><dd>1980.05.16</dd>');
+  throw new Error('Must not load a mismatched artist song');
+ });
+ assert.equal((await getBirthdayArtists('2000-05-16')).tracks.length,0);
+});
+test('source failures are distinguishable from no matching records',async t=>{
+ reset();t.mock.method(globalThis,'fetch',async()=>{throw new Error('Offline');});
+ assert.equal((await getBirthdayArtists('1995-11-27')).status,'unavailable');
+ const releases=await getReleaseConnections('1995-11-27');assert.ok(releases.every(r=>r.status==='unavailable'&&r.tracks.length===0));
+});
+test('pop results require matching annual chart evidence',async t=>{
+ for(const hit of [false,true]){
+  reset();globalThis.__birthdayChartsV2?.cache.clear();
+  const mock=t.mock.method(globalThis,'fetch',async input=>{
+   const url=new URL(input);
+   if(url.hostname==='query.wikidata.org')return Response.json({results:{bindings:[{item:value('https://www.wikidata.org/entity/Q123'),itemLabel:value('PLAY'),artist:value('https://www.wikidata.org/entity/Q456'),artistLabel:value('AKMU'),date:value('2014-04-07T00:00:00Z')} ]}});
+   if(url.hostname==='www.wikidata.org')return Response.json({entities:{}});
+   if(url.pathname.includes('/chart/'))return new Response(`<table><tr class="lst50"><td><input name="input_check" value="${hit?42:99}"><span class="rank">1</span><div class="rank01"><a>Other song</a></div><div class="rank02"><a>Other artist</a></div></td></tr></table>`);
+   return new Response(album('2014.04.07'));
+  });
+  const [exact]=await getReleaseConnections('2014-04-07','pop');
+  assert.equal(exact.tracks.length,hit?1:0);if(hit)assert.match(exact.tracks[0].popSource,/chartGenre=POP/);
+  mock.mock.restore();
+ }
+});
+test('a failed pop year preserves songs verified in other years and reports partial results',async t=>{
+ reset();globalThis.__birthdayChartsV2?.cache.clear();
+ t.mock.method(globalThis,'fetch',async input=>{
+  const url=new URL(input);
+  if(url.hostname==='query.wikidata.org')return Response.json({results:{bindings:[{item:value('https://www.wikidata.org/entity/Q123'),itemLabel:value('PLAY'),artistLabel:value('AKMU'),date:value('2014-04-07T00:00:00Z')} ]}});
+  if(url.pathname.includes('/chart/')){
+   if(url.searchParams.get('chartDate')==='1990')throw new Error('Offline');
+   return new Response('<table><tr class="lst50"><td><input name="input_check" value="42"><span class="rank">1</span><div class="rank01"><a>200%</a></div><div class="rank02"><a>AKMU</a></div></td></tr></table>');
+  }
+  return new Response(album('2014.04.07'));
+ });
+ const [exact]=await getReleaseConnections('2014-04-07','pop');
+ assert.equal(exact.tracks.length,1);assert.equal(exact.status,'partial');assert.ok(exact.issues.some(i=>i.source==='www.melon.com'));
+});
+test('pop discovery failure is unavailable, not a successful disabled domestic fallback',async t=>{
+ reset();t.mock.method(globalThis,'fetch',async()=>{throw new Error('Offline');});
+ const results=await getReleaseConnections('2000-05-16','pop');assert.ok(results.every(r=>r.status==='unavailable'));
+});
+test('candidate limit is not reported as a connection failure',async t=>{
+ reset();t.mock.method(globalThis,'fetch',async input=>{
+  if(new URL(input).hostname==='query.wikidata.org')return Response.json({results:{bindings:Array.from({length:7},(_,i)=>({person:value(`https://www.wikidata.org/entity/Q${i+1}`),personLabel:value(`Singer${i}`),dob:value('1993-05-16T00:00:00Z')}))}});
+  return new Response('<table></table>');
+ });
+ const result=await getBirthdayArtists('2000-05-16');assert.equal(result.status,'ok');assert.equal(result.limited,true);assert.deepEqual(result.issues,[]);
+});
+test('failed song detail fetch does not masquerade as no matching artist songs',async t=>{
+ reset();t.mock.method(globalThis,'fetch',async input=>{
+  const url=new URL(input);
+  if(url.hostname==='query.wikidata.org')return Response.json({results:{bindings:[{person:value('https://www.wikidata.org/entity/Q1'),personLabel:value('Singer'),dob:value('1993-05-16T00:00:00Z')} ]}});
+  if(url.pathname.includes('/search/'))return new Response(`<table><tr><td><input name="input_check" value="22"><a class="fc_gray">Song</a><div id="artistName"><a href="javascript:melon.link.goArtistDetail('9')">Singer</a></div></td></tr></table>`);
+  if(url.pathname.includes('/artist/'))return new Response('<dt>생일</dt><dd>1993.05.16</dd>');
+  throw new Error('Offline');
+ });
+ const result=await getBirthdayArtists('2000-05-16');assert.equal(result.status,'partial');assert.equal(result.tracks.length,0);assert.equal(result.issues[0].code,'NETWORK');
+});
+test('album 406 uses song album search and verifies artist, album and exact release date',async t=>{
+ reset();let details=0;
+ t.mock.method(globalThis,'fetch',async input=>{
+  const url=new URL(input);
+  if(url.hostname==='query.wikidata.org')return Response.json({results:{bindings:[{item:value('https://www.wikidata.org/entity/Q123'),itemLabel:value('PLAY'),artistLabel:value('AKMU'),date:value('2014-04-07T00:00:00Z')}]}});
+  if(url.hostname==='musicbrainz.org')return Response.json({releases:[]});
+  if(url.pathname==='/search/album/index.htm')return new Response('Missing page',{status:406});
+  if(url.pathname==='/search/song/index.htm'){
+   assert.equal(url.searchParams.get('section'),'album');
+   const row=(id,artist,albumId)=>`<tr><td><input name="input_check" value="${id}"><a class="fc_gray">Song ${id}</a><div id="artistName"><a>${artist}</a></div><a href="javascript:melon.link.goAlbumDetail('${albumId}')">PLAY</a></td></tr>`;
+   return new Response('<table>'+row(1,'AKMU',10)+row(2,'AKMU',10)+row(3,'Other artist',20)+row(4,'AKMU',30)+'</table>');
+  }
+  if(url.pathname==='/song/detail.htm'){
+   details++;
+   return new Response(`<div class="section_info"><dt>발매일</dt><dd>${url.searchParams.get('songId')==='1'?'2014.04.07':'2014.04.08'}</dd><div class="thumb"><img src="https://cdnimg.melon.co.kr/test.jpg"></div></div>`);
+  }
+  throw new Error('Unexpected request');
+ });
+ const [exact]=await getReleaseConnections('2014-04-07');
+ assert.equal(exact.status,'ok');assert.deepEqual(exact.issues,[]);
+ assert.equal(exact.tracks.length,1);assert.equal(exact.tracks[0].id,'1');
+ assert.equal(exact.tracks[0].date,'2014-04-07');assert.ok(exact.tracks[0].cover);
+ assert.equal(details,2,'one representative per album, wrong artist excluded before detail lookup');
+});
+test('Melon outages resolve through an independent Apple API with exact date validation',async t=>{
+ reset();globalThis.__birthdayItunes.cache.clear();globalThis.__birthdayItunes.last=0;
+ let appleCalls=0;
+ t.mock.method(globalThis,'fetch',async input=>{
+  const url=new URL(input);
+  if(url.hostname==='query.wikidata.org')return Response.json({results:{bindings:[{item:value('https://www.wikidata.org/entity/Q123'),itemLabel:value('PLAY'),artistLabel:value('AKMU'),date:value('2014-04-07T00:00:00Z')}]}});
+  if(url.hostname==='musicbrainz.org')return Response.json({releases:[]});
+  if(url.hostname==='www.melon.com')return new Response('Unavailable',{status:406});
+  if(url.hostname==='itunes.apple.com'){
+   appleCalls++;return Response.json({results:[{kind:'song',trackId:123,artistName:'AKMU',trackName:'200%',collectionName:'PLAY',releaseDate:'2014-04-07T12:00:00Z',trackViewUrl:'https://music.apple.com/us/album/play/456?i=123',artworkUrl100:'https://is1-ssl.mzstatic.com/a.jpg'}]});
+  }
+  throw new Error('Unexpected source');
+ });
+ const [exact]=await getReleaseConnections('2014-04-07');
+ assert.equal(appleCalls,1);assert.equal(exact.status,'ok');assert.equal(exact.tracks[0].provider,'itunes');assert.equal(exact.tracks[0].title,'200%');
+});

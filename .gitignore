@@ -1,0 +1,10 @@
+build/
+.DS_Store
+
+node_modules/
+.next/
+.env*
+!.env.example
+
+.vercel/
+.openai/
