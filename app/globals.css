@@ -292,7 +292,7 @@ button.retry:disabled { opacity:.6; cursor:wait; }
 .search-loading-progress { width:190px; height:3px; overflow:hidden; border-radius:8px; background:#303030; margin:24px 0 12px; }
 .search-loading-progress span { display:block; width:40%; height:100%; background:var(--accent); animation:loading-sweep 1.3s ease-in-out infinite; }
 .search-loading-screen .loading-estimate { font-size:12px; color:#d0d0d0; }
-.search-loading-screen .loading-elapsed { font-size:11px; color:#999; margin-top:7px; }
+.search-loading-screen .loading-sources { font-size:11px; color:#999; margin-top:8px; line-height:1.6; }
 @keyframes record-turn { to { transform:rotate(360deg); } }
 @keyframes equalizer-pulse { from { transform:scaleY(.3); } to { transform:scaleY(1); } }
 @keyframes loading-sweep { from { transform:translateX(-110%); } to { transform:translateX(360%); } }
