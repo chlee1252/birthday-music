@@ -1,0 +1,6 @@
+legacy/
+.openai/
+.git/
+node_modules/
+.next/
+.env*
