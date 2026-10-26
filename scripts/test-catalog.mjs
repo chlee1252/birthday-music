@@ -45,6 +45,9 @@ try{
  assert.ok((await findCatalogReleases('1982-11-29','pop','exact')).some(t=>t.id==='original'));
  assert.ok((await findCatalogReleases('2009-07-13','pop','exact')).every(t=>t.id!=='reissue'));
  assert.ok((await findCatalogReleases('2007-01-01','pop','exact')).every(t=>t.id!=='late-chart'));
+ await saveCatalog({tracks:[{...song('other-provider-edition','2015-03-02'),title:'Older hit',provider:'melon'}]});
+ assert.equal((await database().query("select review_state from music_catalog.tracks where id='other-provider-edition'")).rows[0].review_state,'quarantined','chart chronology must propagate across provider records');
+ assert.equal((await findCatalogReleases('2015-03-02','pop','exact')).length,0);
  await database().query("update music_catalog.worker set lease_token=null,lease_until=null,melon_retry_at=now()+interval '5 minutes' where id=1");
  await enqueueJobs([{id:'test:melon-backoff',kind:'melon_chart',payload:{year:1995},priority:0}]);
  const originalFetch=globalThis.fetch;
