@@ -6,7 +6,7 @@
     "dev": "next dev --hostname 127.0.0.1 --port 4173",
     "build": "npm test && next build",
     "start": "next start --hostname 127.0.0.1 --port 4173",
-    "test": "node --conditions=react-server --test tests/*.test.js",
+    "test": "node --import ./tests/unit-env.js --conditions=react-server --test tests/*.test.js",
     "catalog": "node --env-file-if-exists=.env.local --conditions=react-server scripts/catalog.mjs"
   },
   "dependencies": {
