@@ -239,3 +239,16 @@ test('Melon hits survive discovery outages while preserving partial status',asyn
  const [result]=await getReleaseConnections('1995-01-24','kr','exact');
  assert.equal(result.tracks[0].title,'잘못된 만남');assert.equal(result.status,'partial');assert.ok(result.issues.length);
 });
+
+test('a year-only Melon release is incomplete metadata, not a network error or January 1',async t=>{
+ reset();globalThis.__birthdayChartsV2.cache.clear();
+ t.mock.method(globalThis,'fetch',async input=>{
+  const url=new URL(input);
+  if(url.hostname==='query.wikidata.org')return Response.json({results:{bindings:[]}});
+  if(url.hostname==='musicbrainz.org')return Response.json({releases:[]});
+  if(url.pathname.includes('/chart/'))return new Response('<table><tr class="lst50"><td><input name="input_check" value="99"><span class="rank">1</span><div class="rank01"><a>Song</a></div><div class="rank02"><a>Singer</a></div></td></tr></table>');
+  return new Response('<div class="section_info"><dt>발매일</dt><dd>1995</dd></div>');
+ });
+ const [result]=await getReleaseConnections('1995-01-01','kr','exact');
+ assert.equal(result.status,'ok');assert.deepEqual(result.tracks,[]);assert.deepEqual(result.issues,[]);assert.equal(result.limited,true);
+});
