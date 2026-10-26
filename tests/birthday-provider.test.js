@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import {getReleaseConnections,getBirthdayArtists} from '../lib/birthday-provider.js';
 const value=v=>({value:v});
 const album=date=>`<li class="album11_li"><a class="thumb"><img src="https://cdnimg.melon.co.kr/a.jpg"></a><dt><a>PLAY</a></dt><dd class="atistname"><div class="ellipsis"><a>AKMU (악뮤)</a></div></dd><span album-song-id="42"></span><span class="songname12">200%</span><span class="cnt_view">${date}</span></li>`;
-function reset(){globalThis.__birthdayConnections.cache.clear();globalThis.__birthdayConnections.pending.clear();globalThis.__birthdayConnections.mbLast=0;globalThis.__birthdayItunes.cache.clear();globalThis.__birthdayItunes.last=0;}
+function reset(){
+ // Existing discovery tests isolate the additional chart lookup.
+ globalThis.__birthdayChartsV2.cache.clear();
+ for(let year=1955;year<new Date().getFullYear();year++)globalThis.__birthdayChartsV2.cache.set(`${year}:KPOP`,{expires:Date.now()+60000,value:{status:'ok',tracks:[]}});
+globalThis.__birthdayConnections.cache.clear();globalThis.__birthdayConnections.pending.clear();globalThis.__birthdayConnections.mbLast=0;globalThis.__birthdayItunes.cache.clear();globalThis.__birthdayItunes.last=0;}
 test('live adapter joins verified aliases and never uses a mismatched date',async t=>{
  reset();t.mock.method(globalThis,'fetch',async input=>{
   const url=new URL(input);
@@ -206,4 +210,32 @@ test('pop song lookup starts while global popularity evidence is still pending',
  });
  const [result]=await getReleaseConnections('2014-04-07','pop','exact');
  assert.equal(result.status,'ok');
+});
+
+test('Melon chart dates find Korean hits missing from both discovery catalogs',async t=>{
+ reset();globalThis.__birthdayChartsV2.cache.clear();
+ let detailRequests=0;
+ t.mock.method(globalThis,'fetch',async input=>{
+  const url=new URL(input);
+  if(url.hostname==='query.wikidata.org')return Response.json({results:{bindings:[]}});
+  if(url.hostname==='musicbrainz.org')return Response.json({releases:[]});
+  if(url.pathname.includes('/chart/'))return new Response('<table><tr class="lst50"><td><input name="input_check" value="62462"><span class="rank">1</span><div class="rank01"><a>잘못된 만남</a></div><div class="rank02"><a>김건모</a></div></td></tr></table>');
+  detailRequests++;
+  return new Response('<div class="section_info"><div class="thumb"><img src="https://cdnimg.melon.co.kr/cover.jpg"></div><dt>발매일</dt><dd>1995.01.24</dd></div>');
+ });
+ const [match]=await getReleaseConnections('1995-01-24','kr','exact');
+ assert.equal(match.status,'ok');assert.equal(match.tracks[0].title,'잘못된 만남');assert.equal(match.tracks[0].date,'1995-01-24');assert.ok(match.tracks[0].cover);
+ const [other]=await getReleaseConnections('1995-01-25','kr','exact');
+ assert.deepEqual(other.tracks,[]);assert.equal(detailRequests,1);
+});
+test('Melon hits survive discovery outages while preserving partial status',async t=>{
+ reset();globalThis.__birthdayChartsV2.cache.clear();
+ t.mock.method(globalThis,'fetch',async input=>{
+  const url=new URL(input);
+  if(url.hostname!=='www.melon.com')throw new Error('Offline');
+  if(url.pathname.includes('/chart/'))return new Response('<table><tr class="lst50"><td><input name="input_check" value="62462"><span class="rank">1</span><div class="rank01"><a>잘못된 만남</a></div><div class="rank02"><a>김건모</a></div></td></tr></table>');
+  return new Response('<div class="section_info"><dt>발매일</dt><dd>1995.01.24</dd></div>');
+ });
+ const [result]=await getReleaseConnections('1995-01-24','kr','exact');
+ assert.equal(result.tracks[0].title,'잘못된 만남');assert.equal(result.status,'partial');assert.ok(result.issues.length);
 });
