@@ -6,12 +6,14 @@
     "dev": "next dev --hostname 127.0.0.1 --port 4173",
     "build": "npm test && next build",
     "start": "next start --hostname 127.0.0.1 --port 4173",
-    "test": "node --conditions=react-server --test tests/*.test.js"
+    "test": "node --conditions=react-server --test tests/*.test.js",
+    "catalog": "node --env-file-if-exists=.env.local --conditions=react-server scripts/catalog.mjs"
   },
   "dependencies": {
     "cheerio": "^1.0.0",
     "lucide-react": "^1.61.0",
     "next": "^16.4.3",
+    "pg": "^8.23.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "server-only": "^0.0.1"
