@@ -1,3 +1,5 @@
+import {auditCatalog,reindexCatalog} from '../lib/catalog/audit.js';
+import {migrateCatalog} from '../lib/catalog/migrate.js';
 import {readFile} from 'node:fs/promises';
 import {parseArgs} from 'node:util';
 import {database,closeDatabase} from '../lib/catalog/database.js';
@@ -9,13 +11,15 @@ function positive(value){const number=Number(value);if(!Number.isInteger(number)
 try{
  const command=positionals[0];
  if(command==='migrate'){
-  await database().query(await readFile(new URL('../supabase/migrations/202610260001_music_catalog.sql',import.meta.url),'utf8'));
+  await migrateCatalog();
   console.log('Catalog schema ready');
  }else if(command==='seed'){
   await enqueueJobs(initialJobs({artistLimit:positive(values.artists)}));console.log(await catalogStats());
  }else if(command==='ingest'){
   console.log(await ingestCatalog({maxJobs:positive(values.jobs),budgetMs:positive(values.seconds)*1000,targetTracks:values.target?positive(values.target):Infinity,onProgress:progress=>console.log(JSON.stringify(progress))}));
- }else if(command==='stats')console.log(await catalogStats());
+ }else if(command==='audit')console.log(JSON.stringify(await auditCatalog(),null,2));
+ else if(command==='reindex')console.log(await reindexCatalog());
+ else if(command==='stats')console.log(await catalogStats());
  else throw new Error('Usage: npm run catalog -- migrate|seed|ingest|stats [--jobs 20 --seconds 50 --target 1000 --artists 40]');
 }catch(error){console.error(error.code||'Catalog command failed; check the database configuration and command arguments.');process.exitCode=1;}
 finally{await closeDatabase();}

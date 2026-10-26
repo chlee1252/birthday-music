@@ -3,6 +3,22 @@ import assert from 'node:assert/strict';
 import {releaseDateParts,appleArtist,appleAlbum,appleTrack} from '../lib/catalog/normalize.js';
 import {catalogFirstReleases} from '../lib/catalog/search.js';
 import {GET as sync} from '../app/api/catalog/sync/route.js';
+import {catalogIdentity,albumEdition,trackQuality} from '../lib/catalog/quality.js';
+test('quality groups remasters but preserves different live/remix recordings',()=>{
+ assert.equal(catalogIdentity('Song (2011 Remaster)','Singer'),catalogIdentity('Song','Singer'));
+ assert.notEqual(catalogIdentity('Song (Live)','Singer'),catalogIdentity('Song','Singer'));
+ assert.notEqual(catalogIdentity('Song (Remix)','Singer'),catalogIdentity('Song','Singer'));
+ assert.equal(albumEdition('Live While We Are Young - Single'),'catalog');
+ assert.equal(albumEdition('Live at Wembley'),'live');
+});
+test('quality quarantines tribute records and preserves uncertain date evidence',()=>{
+ const row={title:'Song',artist_name:'Singer',date_precision:'day',release_date:'1995-01-01',cover_url:'https://example.com/a.jpg'};
+ assert.equal(trackQuality(row,{edition:'tribute'}).review_state,'quarantined');
+ assert.equal(trackQuality(row).review_state,'accepted');
+ assert.ok(trackQuality(row).quality_flags.includes('january_first_review'));
+ assert.ok(trackQuality({...row,date_precision:'year',release_date:null}).quality_flags.includes('imprecise_date'));
+ assert.equal(trackQuality({...row,release_year:2009,first_chart_year:1983}).review_state,'quarantined');
+});
 test('catalog keeps year/month precision and never invents January 1',()=>{
  assert.equal(releaseDateParts('1995').date_precision,'year');
  assert.equal(releaseDateParts('1995').release_date,null);
