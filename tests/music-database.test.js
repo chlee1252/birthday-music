@@ -62,3 +62,10 @@ test('catalog sync cannot be triggered without the server secret',async t=>{
  const previous=process.env.CRON_SECRET;process.env.CRON_SECRET='test-secret';t.after(()=>{if(previous===undefined)delete process.env.CRON_SECRET;else process.env.CRON_SECRET=previous;});
  for(const headers of [{},{authorization:'Bearer wrong'}])assert.equal((await sync(new Request('https://example.com/api/catalog/sync',{headers}))).status,401);
 });
+
+test('two catalog misses share a single combined discovery request',async()=>{
+ const calls=[];
+ const result=await catalogFirstReleases('1995-11-27','kr',null,async(...args)=>{calls.push(args);return ['exact','same'].map(mode=>({mode,status:'ok',tracks:[],issues:[]}));},{configured:true,lookup:async()=>[]});
+ assert.deepEqual(calls,[['1995-11-27','kr',null]]);
+ assert.deepEqual(result.map(r=>r.mode),['exact','same']);
+});

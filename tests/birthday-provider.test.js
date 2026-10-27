@@ -252,3 +252,11 @@ test('a year-only Melon release is incomplete metadata, not a network error or J
  const [result]=await getReleaseConnections('1995-01-01','kr','exact');
  assert.equal(result.status,'ok');assert.deepEqual(result.tracks,[]);assert.deepEqual(result.issues,[]);assert.equal(result.limited,true);
 });
+
+test('completed birthday artist results are reused for the same month and day',async t=>{
+ reset();let calls=0;
+ t.mock.method(globalThis,'fetch',async()=>{calls++;return Response.json({results:{bindings:[]}});});
+ assert.equal((await getBirthdayArtists('1995-11-27','kr')).status,'ok');
+ assert.equal((await getBirthdayArtists('2005-11-27','kr')).status,'ok');
+ assert.equal(calls,1);
+});

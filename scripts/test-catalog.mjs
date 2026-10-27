@@ -5,6 +5,8 @@ import {readFile} from 'node:fs/promises';
 import {database,closeDatabase} from '../lib/catalog/database.js';
 import {saveCatalog,enqueueJobs,catalogStats} from '../lib/catalog/store.js';
 import {findCatalogReleases} from '../lib/catalog/search.js';
+import {findCatalogChartArchive} from '../lib/catalog/charts.js';
+import {getChartArchive} from '../lib/chart-provider.js';
 import {reserveCollectionBudget} from '../lib/catalog/budget.js';
 import {ingestCatalog} from '../lib/catalog/ingest.js';
 import {releaseDateParts} from '../lib/catalog/normalize.js';
@@ -50,6 +52,18 @@ try{
  assert.equal((await database().query("select review_state from music_catalog.tracks where id='other-provider-edition'")).rows[0].review_state,'quarantined','chart chronology must propagate across provider records');
  assert.equal((await findCatalogReleases('2015-03-02','pop','exact')).length,0);
  await database().query("update music_catalog.worker set lease_token=null,lease_until=null,melon_retry_at=now()+interval '5 minutes' where id=1");
+ await database().query("insert into music_catalog.chart_entries(year,region,rank,track_id,title,artist_name,source_url) values (1995,'kr',1,'melon:101','Chart first','Singer','https://www.melon.com/chart/age/index.htm'),(1995,'kr',2,'melon:102','Chart second','Singer','https://www.melon.com/chart/age/index.htm')");
+ await enqueueJobs([{id:'melon:track:101',kind:'melon_track',payload:{track:{cover:'https://cdnimg.melon.co.kr/cover.jpg'}}}]);
+ const originalChartFetch=globalThis.fetch;
+ globalThis.fetch=async()=>assert.fail('Stored charts must not contact Melon');
+ try{
+  const chart=await getChartArchive(1995,'KPOP');
+  assert.equal(chart.origin,'catalog');assert.equal(chart.tracks.length,2);
+  assert.equal(chart.tracks[0].title,'Chart first');assert.equal(chart.tracks[0].cover,'https://cdnimg.melon.co.kr/cover.jpg');
+  assert.equal(chart.tracks[1].id,'102','unenriched tracks retain their chart ranking');
+  assert.equal(await findCatalogChartArchive(1995,'POP'),null,'regions cannot be substituted');
+  assert.equal(await findCatalogChartArchive(1996,'KPOP'),null,'years cannot be substituted');
+ }finally{globalThis.fetch=originalChartFetch;}
  const originalBudgetFetch=globalThis.fetch;
  globalThis.fetch=async()=>assert.fail('No provider call is allowed before the budget review');
  try{assert.equal((await ingestCatalog({maxJobs:1})).stoppedReason,'USAGE_REVIEW_REQUIRED');}finally{globalThis.fetch=originalBudgetFetch;}
