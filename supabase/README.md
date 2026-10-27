@@ -49,3 +49,7 @@ The integration script refuses a non-local or differently named database. It ver
 ## Quality audit
 
 `npm run catalog -- reindex` recomputes canonical identities, editions, chart evidence and quarantine flags. `npm run catalog -- audit` reports searchable songs, month/day coverage, missing dates, chart coverage, provider conflicts and failed jobs. Keep source dates intact; uncertain dates must not be filled with invented January 1 values. Album cover URLs are referenced remotely; media is not copied.
+
+## Explicit production collection
+
+For this checkout, `.env.local` points to the local pilot database. Use `npm run catalog:supabase -- ingest --jobs 7000 --seconds 7200` to collect directly into Supabase using the ignored `.env.supabase.local` file. This command requires a Supabase host and logs only the host/database, never the password. `npm run catalog:supabase -- stats` reads the same destination. A completed batch does not imply an empty queue; inspect pending and failed counts.

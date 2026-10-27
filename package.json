@@ -7,7 +7,8 @@
     "build": "npm test && next build",
     "start": "next start --hostname 127.0.0.1 --port 4173",
     "test": "node --import ./tests/unit-env.js --conditions=react-server --test tests/*.test.js",
-    "catalog": "node --env-file-if-exists=.env.local --conditions=react-server scripts/catalog.mjs"
+    "catalog": "node --env-file-if-exists=.env.local --conditions=react-server scripts/catalog.mjs",
+    "catalog:supabase": "node --env-file=.env.supabase.local --conditions=react-server scripts/catalog.mjs"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

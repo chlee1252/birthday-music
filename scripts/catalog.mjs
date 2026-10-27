@@ -10,6 +10,9 @@ const {positionals,values}=parseArgs({allowPositionals:true,options:{jobs:{type:
 function positive(value){const number=Number(value);if(!Number.isInteger(number)||number<1)throw new Error('Options must be positive integers');return number;}
 try{
  const command=positionals[0];
+ const target=new URL(process.env.MUSIC_DATABASE_URL||'postgresql://unconfigured');
+ if(process.env.npm_lifecycle_event==='catalog:supabase'&&!target.hostname.endsWith('.supabase.com')&&!target.hostname.endsWith('.supabase.co'))throw new Error('SUPABASE_TARGET_REQUIRED');
+ if(command==='ingest')console.log(JSON.stringify({event:'catalog_target',host:target.hostname,database:target.pathname}));
  if(command==='migrate'){
   await migrateCatalog();
   console.log('Catalog schema ready');
