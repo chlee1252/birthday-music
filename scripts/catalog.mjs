@@ -19,7 +19,7 @@ try{
  }else if(command==='seed'){
   await enqueueJobs(initialJobs({artistLimit:positive(values.artists)}));console.log(await catalogStats());
  }else if(command==='ingest'){
-  console.log(await ingestCatalog({maxJobs:positive(values.jobs),budgetMs:positive(values.seconds)*1000,targetTracks:values.target?positive(values.target):Infinity,onProgress:progress=>console.log(JSON.stringify(progress))}));
+  console.log(await ingestCatalog({maxJobs:positive(values.jobs),budgetMs:positive(values.seconds)*1000,targetTracks:values.target?positive(values.target):Infinity,onProgress:progress=>console.log(JSON.stringify({...progress,at:new Date().toISOString()}))}));
  }else if(command==='audit')console.log(JSON.stringify(await auditCatalog(),null,2));
  else if(command==='reindex')console.log(await reindexCatalog());
  else if(command==='stats')console.log(await catalogStats());

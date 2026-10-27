@@ -5,6 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {database,closeDatabase} from '../lib/catalog/database.js';
 import {saveCatalog,enqueueJobs,catalogStats} from '../lib/catalog/store.js';
 import {findCatalogReleases} from '../lib/catalog/search.js';
+import {reserveCollectionBudget} from '../lib/catalog/budget.js';
 import {ingestCatalog} from '../lib/catalog/ingest.js';
 import {releaseDateParts} from '../lib/catalog/normalize.js';
 const url=new URL(process.env.MUSIC_DATABASE_URL||'postgresql://localhost/invalid');
@@ -49,6 +50,19 @@ try{
  assert.equal((await database().query("select review_state from music_catalog.tracks where id='other-provider-edition'")).rows[0].review_state,'quarantined','chart chronology must propagate across provider records');
  assert.equal((await findCatalogReleases('2015-03-02','pop','exact')).length,0);
  await database().query("update music_catalog.worker set lease_token=null,lease_until=null,melon_retry_at=now()+interval '5 minutes' where id=1");
+ const originalBudgetFetch=globalThis.fetch;
+ globalThis.fetch=async()=>assert.fail('No provider call is allowed before the budget review');
+ try{assert.equal((await ingestCatalog({maxJobs:1})).stoppedReason,'USAGE_REVIEW_REQUIRED');}finally{globalThis.fetch=originalBudgetFetch;}
+ await database().query("update music_catalog.worker set budget_reviewed_until=now()+interval '1 hour',database_bytes_limit=1 where id=1");
+ assert.equal((await ingestCatalog({maxJobs:1})).stoppedReason,'DATABASE_SIZE_LIMIT');
+ await database().query("update music_catalog.worker set database_bytes_limit=300000000,daily_job_limit=1,budget_day=null,daily_job_attempts=0 where id=1");
+ const concurrentBudgets=await Promise.all([reserveCollectionBudget(),reserveCollectionBudget()]);
+ assert.equal(concurrentBudgets.filter(b=>b.allowed).length,1,'concurrent reservations must share one budget');
+ assert.equal((await ingestCatalog({maxJobs:1})).stoppedReason,'DAILY_JOB_LIMIT');
+ await database().query("update music_catalog.worker set budget_reviewed_until=now()-interval '1 second' where id=1");
+ assert.equal((await reserveCollectionBudget()).reason,'USAGE_REVIEW_REQUIRED');
+ await database().query("update music_catalog.worker set budget_reviewed_until=now()+interval '1 hour',daily_job_limit=6000,budget_day=current_date-1 where id=1");
+ assert.equal((await reserveCollectionBudget()).allowed,true,'a new UTC day gets a fresh budget');
  await enqueueJobs([{id:'test:melon-backoff',kind:'melon_chart',payload:{year:1995},priority:0}]);
  const originalFetch=globalThis.fetch;
  globalThis.fetch=async url=>{assert.equal(new URL(url).hostname,'itunes.apple.com');return Response.json({results:[{wrapperType:'artist',artistId:1,artistName:'Singer',artistLinkUrl:'https://music.apple.com/us/artist/1'}]});};

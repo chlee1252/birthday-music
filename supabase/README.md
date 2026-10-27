@@ -53,3 +53,13 @@ The integration script refuses a non-local or differently named database. It ver
 ## Explicit production collection
 
 For this checkout, `.env.local` points to the local pilot database. Use `npm run catalog:supabase -- ingest --jobs 7000 --seconds 7200` to collect directly into Supabase using the ignored `.env.supabase.local` file. This command requires a Supabase host and logs only the host/database, never the password. `npm run catalog:supabase -- stats` reads the same destination. A completed batch does not imply an empty queue; inspect pending and failed counts.
+
+## Free-tier-only operating policy
+
+All infrastructure must remain on free tiers. Do not upgrade plans, enable paid add-ons, purchase additional usage, or add a paid collection worker. Supabase Free and Vercel Hobby were verified in their dashboards on 2026-10-27. Provider limits are not interchangeable with spending caps: the service may become restricted at a free limit.
+
+Migration 005 makes collection fail closed until `music_catalog.worker.budget_reviewed_until` is in the future. After inspecting the Supabase organization and Vercel team usage dashboards, an operator may set a short review window (this rollout uses 8 hours). Expiry returns `USAGE_REVIEW_REQUIRED`; do not renew it blindly. This shared database state applies to both the CLI and the authenticated daily cron.
+
+Before every job, collection checks the **whole PostgreSQL database** size and reserves one shared daily attempt, including retries. It stops at **300,000,000 bytes** (200 MB headroom below the stated 500 MB Free database quota) or **6,000 attempts per UTC day**. Smaller limits are allowed. A failed budget query aborts collection. The guard does not limit unrelated administrative writes, public website traffic, all account egress, or provider-side physical disk/WAL usage. Media stays on the source CDNs. Do not describe this as an automatic monitor for every hosting metric.
+
+`npm run catalog:supabase -- stats` reports database size, configured limits, daily attempts and review expiry. Keep website usage below free allowances; re-check dashboards before any further bulk batches. If an account metric approaches its limit, stop the affected work instead of upgrading. The daily cron remains scheduled, but collection is skipped after the usage review expires.
