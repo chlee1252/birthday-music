@@ -82,5 +82,18 @@ try{
  globalThis.fetch=async url=>{assert.equal(new URL(url).hostname,'itunes.apple.com');return Response.json({results:[{wrapperType:'artist',artistId:1,artistName:'Singer',artistLinkUrl:'https://music.apple.com/us/artist/1'}]});};
  try{assert.equal((await ingestCatalog({maxJobs:1})).completed,1);}finally{globalThis.fetch=originalFetch;}
  assert.equal((await database().query("select state from music_catalog.jobs where id='test:melon-backoff'")).rows[0].state,'pending','cooldown skips Melon without declaring missing data');
+ // A targeted retry must never consume a different queued job.
+ const noJobs=await ingestCatalog({jobIds:[],maxJobs:1});
+ assert.equal(noJobs.completed+noJobs.failed,0);
+ const retryArtist={id:'itunes:99',name:'Retry singer',region:'pop',source_url:'https://music.apple.com/us/artist/99'};
+ const retryAlbum={id:'itunes:88',artist_id:retryArtist.id,title:'Retry album',source_url:'https://music.apple.com/us/album/88'};
+ await enqueueJobs([{id:'test:empty-album',kind:'apple_tracks',payload:{artist:retryArtist,album:retryAlbum}},{id:'test:other-credit',kind:'apple_tracks',payload:{artist:retryArtist,album:retryAlbum}}]);
+ globalThis.fetch=async()=>Response.json({results:[{wrapperType:'collection',collectionId:88}]});
+ try{assert.equal((await ingestCatalog({jobIds:['test:empty-album'],maxJobs:1})).failed,1);}finally{globalThis.fetch=originalFetch;}
+ assert.equal((await database().query("select last_error from music_catalog.jobs where id='test:empty-album'")).rows[0].last_error,'APPLE_TRACK_LIST_EMPTY');
+ assert.equal((await database().query("select state from music_catalog.jobs where id='test:other-credit'")).rows[0].state,'pending');
+ globalThis.fetch=async()=>Response.json({results:[{wrapperType:'track',kind:'song',collectionId:88,artistId:100,trackId:123,trackName:'Other singer',trackViewUrl:'https://music.apple.com/us/album/88'}]});
+ try{assert.equal((await ingestCatalog({jobIds:['test:other-credit'],maxJobs:1})).failed,1);}finally{globalThis.fetch=originalFetch;}
+ assert.equal((await database().query("select last_error from music_catalog.jobs where id='test:other-credit'")).rows[0].last_error,'NO_MATCHING_ARTIST_TRACKS');
  console.log('PostgreSQL integration passed: dates, regions, leap days, upserts, rollback, jobs, lease, RLS.');
 }finally{await closeDatabase();}
